@@ -2,6 +2,7 @@
 // FCY must be defined before the includes or things go wrong.
 // For some odd reason, the config tool does not set this based
 // on the MCU + Oscillator selected
+// by stancecoke
 #define SYS_FREQ        7370000L
 #define FCY             SYS_FREQ/4
 
