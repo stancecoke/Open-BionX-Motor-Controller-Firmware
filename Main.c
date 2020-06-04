@@ -15,9 +15,9 @@
 #pragma config FCKSMEN = CSW_FSCM_OFF   // Clock Switching and Monitor (Sw Disabled, Mon Disabled)
 
 // FWDT
-#pragma config FWPSB = WDTPSB_16        // WDT Prescaler B (1:16)
-#pragma config FWPSA = WDTPSA_512       // WDT Prescaler A (1:512)
-#pragma config WDT = WDT_ON             // Watchdog Timer (Enabled)
+//#pragma config FWPSB = WDTPSB_16        // WDT Prescaler B (1:16)
+//#pragma config FWPSA = WDTPSA_512       // WDT Prescaler A (1:512)
+//#pragma config WDT = WDT_ON             // Watchdog Timer (Enabled)
 
 // FBORPOR
 #pragma config FPWRT = PWRT_64          // POR Timer Value (64ms)
@@ -41,6 +41,7 @@
 #include <uart.h>
 #include <stdio.h>
 /* Received data is stored in array Buf */
+_FWDT(WDT_OFF);
 char Buf[80];
 char * Receivedddata = Buf;
 /* This is UART1 transmit ISR */
@@ -60,7 +61,7 @@ read */
  ( *( Receivedddata)++) = ReadUART2();
  }
 } 
-
+int __C30_UART = 2;
 int main(void) {
     _TRISD8 = 0; // set D3 to output
     _LATD8 = 1;
@@ -109,18 +110,22 @@ Also Enable loopback mode */
 
     while(1)
     {
+    
         _LATD8 = 0;
-        __delay_ms(1000);
+    
+        printf("%d\r\n", PORTD);
+        
+        __delay_ms(300);
+        //putsUART2 ((unsigned int *)Txdata);
+        /* Wait for transmission to complete */
+        //while(BusyUART2());
+    
         _LATD8 = 1;
-        __delay_ms(1000);
+        __delay_ms(300);
 
      /* Load transmit buffer and transmit the same till null character is
     encountered */
-    sprintf(Txdata, "%b\r\n", PORTD);
 
-    putsUART2 ((unsigned int *)Txdata);
-    /* Wait for transmission to complete */
-    while(BusyUART2());
     }
  /* Turn off UART module */
     CloseUART2();
