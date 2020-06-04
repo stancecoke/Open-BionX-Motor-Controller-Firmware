@@ -2,7 +2,7 @@ Open-BionX-Motor-Controller-Firmware
 
 This is the very first beginning of the project, nothing works yet :-)
 
-you need:
+you need:  
 MLAP X IDE  
 https://www.microchip.com/mplab/mplab-x-ide
 

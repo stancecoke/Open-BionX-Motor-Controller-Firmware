@@ -39,6 +39,7 @@
 #include <xc.h>
 #include <libpic30.h>
 #include <uart.h>
+#include <stdio.h>
 /* Received data is stored in array Buf */
 char Buf[80];
 char * Receivedddata = Buf;
@@ -65,7 +66,7 @@ int main(void) {
     _LATD8 = 1;
     
     /* Data to be transmitted using UART communication module */
-char Txdata[] = {'M','i','c','r','o','c','h','i','p',' ','I','C','D','2','\r','\n'};
+char Txdata[30];
 /* Holds the value of baud register */
 unsigned int baudvalue;
 /* Holds the value of uart config reg */
@@ -91,7 +92,12 @@ Also Enable loopback mode */
  UART_ADR_DETECT_DIS &
  UART_RX_OVERRUN_CLEAR;
  OpenUART2(U2MODEvalue, U2STAvalue, baudvalue);
-
+    //welcome message
+    sprintf(Txdata, "BionX OSF v0.0\r\n");
+    putsUART2 ((unsigned int *)Txdata);
+    /* Wait for transmission to complete */
+    while(BusyUART2());
+    
 
 /* Read all the data remaining in receive buffer which are unread 
  while(DataRdyUART1())
@@ -110,6 +116,8 @@ Also Enable loopback mode */
 
      /* Load transmit buffer and transmit the same till null character is
     encountered */
+    sprintf(Txdata, "%b\r\n", PORTD);
+
     putsUART2 ((unsigned int *)Txdata);
     /* Wait for transmission to complete */
     while(BusyUART2());
