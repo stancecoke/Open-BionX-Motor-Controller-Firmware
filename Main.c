@@ -43,27 +43,37 @@
 /* Received data is stored in array Buf */
 
 char Buf[80];
-char * Receivedddata = Buf;
+
+int i=0;
+int __C30_UART = 2;
 /* This is UART1 transmit ISR */
 void __attribute__((__interrupt__, no_auto_psv)) _U2TXInterrupt(void)
 //void _ISR __attribute__((no_auto_psv)) _SPI1Interrupt(void)
 {
  IFS1bits.U2TXIF = 0;
 }
-/* This is UART1 receive ISR */
+
+
+// This is UART1 receive ISR 
 void __attribute__((__interrupt__, no_auto_psv)) _U2RXInterrupt(void)
 {
  IFS1bits.U2RXIF = 0;
-/* Read the receive buffer till atleast one or more character can be
-read */
+// Read the receive buffer till atleast one or more character can be read 
  while( DataRdyUART2())
  {
- ( *( Receivedddata)++) = ReadUART2();
- }
+  
+ Buf[i] = ReadUART2();
+ i++;
+ if(i>20){
+     i=0;
+     //printf("Buffer full\r\n");
+  }
 } 
-int __C30_UART = 2;
+}
+
 int main(void) {
     _TRISD8 = 0; // set D3 to output
+    
     _LATD8 = 1;
     
     /* Data to be transmitted using UART communication module */
@@ -109,24 +119,20 @@ Also Enable loopback mode */
  
 
     while(1)
-    {
-    
+    {   
         _LATD8 = 0;
     
-        printf("%d\r\n", PORTD);
-        
+        printf("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d\r\n", PORTD&1,PORTD&(1<<10),PORTD&(1<<11),PORTD&(1<<3),PORTD&(1<<4),PORTD&(1<<5),PORTD&(1<<6),PORTD&(1<<7),PORTD&(1<<8),PORTD&(1<<9));
+       
         __delay_ms(300);
-        //putsUART2 ((unsigned int *)Txdata);
-        /* Wait for transmission to complete */
-        //while(BusyUART2());
+
     
         _LATD8 = 1;
         __delay_ms(300);
-
-     /* Load transmit buffer and transmit the same till null character is
-    encountered */
-
+                
+        ClrWdt();
     }
+    
  /* Turn off UART module */
     CloseUART2();
     return 0;
