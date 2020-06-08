@@ -40,11 +40,12 @@
 #include <libpic30.h>
 #include <uart.h>
 #include <stdio.h>
+#include <adc10.h>
 /* Received data is stored in array Buf */
 
 char Buf[80];
 
-int i=0;
+int i=0, j=0, ADCValues[3];
 int __C30_UART = 2;
 /* This is UART1 transmit ISR */
 void __attribute__((__interrupt__, no_auto_psv)) _U2TXInterrupt(void)
@@ -70,12 +71,29 @@ void __attribute__((__interrupt__, no_auto_psv)) _U2RXInterrupt(void)
   }
 } 
 }
-
+unsigned int read_analog_channel(int channel)
+{
+    ADCHS = channel;          // Select the requested channel
+    ADCON1bits.SAMP = 1;      // start sampling
+    __delay32(30);            // 1us delay @ 30 MIPS
+    ADCON1bits.SAMP = 0;      // start Converting
+    while (!ADCON1bits.DONE); // Should take 12 * Tad = 1.2us
+    return ADCBUF0;
+}
 int main(void) {
     _TRISD8 = 0; // set D3 to output
     
     _LATD8 = 1;
-    
+    // Make RD0-3 digital outputs
+    TRISD = 0b0000;
+ 
+    // Configure analog inputs
+    TRISB = 0x01FF;      // Port B all inputs
+    ADPCFG = ENABLE_AN3_ANA&ENABLE_AN4_ANA&ENABLE_AN5_ANA;     // Lowest 8 PORTB pins are analog inputs
+    ADCON1 = 0;          // Manually clear SAMP to end sampling, start conversion
+    ADCON2 = 0;          // Voltage reference from AVDD and AVSS
+    ADCON3 = 0x0005;     // Manual Sample, ADCS=5 -> Tad = 3*Tcy = 0.1us
+    ADCON1bits.ADON = 1; // Turn ADC ON
     /* Data to be transmitted using UART communication module */
 char Txdata[30];
 /* Holds the value of baud register */
@@ -122,11 +140,12 @@ Also Enable loopback mode */
     {   
         _LATD8 = 0;
     
-        printf("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d\r\n", PORTD&1,PORTD&(1<<10),PORTD&(1<<11),PORTD&(1<<3),PORTD&(1<<4),PORTD&(1<<5),PORTD&(1<<6),PORTD&(1<<7),PORTD&(1<<8),PORTD&(1<<9));
-       
+       // printf("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d\r\n", PORTD&1,PORTD&(1<<10),PORTD&(1<<11),PORTD&(1<<3),PORTD&(1<<4),PORTD&(1<<5),PORTD&(1<<6),PORTD&(1<<7),PORTD&(1<<8),PORTD&(1<<9));
+       for(j=0; j <= 3; j++){
         __delay_ms(300);
-
-    
+        ADCValues[j]=read_analog_channel(j+3);
+        printf("%d, %d, %d\r\n",ADCValues[0],ADCValues[1],ADCValues[2]);
+       }
         _LATD8 = 1;
         __delay_ms(300);
                 
