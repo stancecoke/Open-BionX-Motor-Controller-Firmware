@@ -54,7 +54,7 @@ void __attribute__((__interrupt__, no_auto_psv)) _U2TXInterrupt(void)
 }
 
 
-// This is UART1 receive ISR 
+// This is UART1 receive ISR done
 void __attribute__((__interrupt__, no_auto_psv)) _U2RXInterrupt(void)
 {
  IFS1bits.U2RXIF = 0;
