@@ -10,4 +10,9 @@ XC16 compiler
 https://www.microchip.com/mplab/compilers
 
 Peripheral libraries for dsPIC30F6015  
-https://www.microchip.com/SWLibraryWeb/product.aspx?product=PIC24%20MCU%20dsPIC%20Peripheral%20Lib
+https://www.microchip.com/SWLibraryWeb/product.aspx?product=PIC24%20MCU%20dsPIC%20Peripheral%20Lib  
+
+Language Tools documentation  
+http://ww1.microchip.com/downloads/en/devicedoc/51456b.pdf
+
+![](https://github.com/stancecoke/Open-BionX-Motor-Controller-Firmware/blob/master/documentation/Pinbelegung%20BionX%20IGH.PNG?raw=true)
