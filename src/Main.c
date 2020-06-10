@@ -1065,26 +1065,65 @@ void SpeedControl(void)
 	// assembly for this kind of operation, see the next function
 
 
-void SpeedControl(void) {/*
+void SpeedControl(void) {
         SFRAC16 *ControlDifferencePtr = ControlDifference;
         SFRAC16 *PIDCoefficientsPtr = PIDCoefficients;
         SFRAC16 x_prefetch;
         SFRAC16 y_prefetch;
 
-	register int reg_a asm("A");
-	register int reg_b asm("B");
+		register int reg_a asm("A");
+		register int reg_b asm("B");
 
-	CORCONbits.SATA = 1;    // Enable Saturation on Acc A
-	reg_a = __builtin_lac(RefSpeed,0);
-	reg_b = __builtin_lac(MeasuredSpeed,0);
-	reg_a = __builtin_subab(reg_a,reg_b);
-    *ControlDifferencePtr = __builtin_sac(reg_a,0);
-	reg_a = __builtin_movsac(&ControlDifferencePtr, &x_prefetch, 2,&PIDCoefficientsPtr, &y_prefetch, 2, 0);
-    reg_a = __builtin_lac(ControlOutput, 0);
-	reg_a = __builtin_mac(x_prefetch,y_prefetch, &ControlDifferencePtr, &x_prefetch, 2,&PIDCoefficientsPtr, &y_prefetch, 2, 0);
-	reg_a = __builtin_mac(x_prefetch,y_prefetch, &ControlDifferencePtr, &x_prefetch, 2,&PIDCoefficientsPtr, &y_prefetch, 2, 0);
-	reg_a = __builtin_mac(x_prefetch,y_prefetch,&ControlDifferencePtr, &x_prefetch, 2, &PIDCoefficientsPtr, &y_prefetch, 2, 0);
+		CORCONbits.SATA = 1;    // Enable Saturation on Acc A
+
+	#if __C30_VERSION__ == 320
+	#error "This Demo is not supported with v3.20"
+	#endif
+
+	#if __C30_VERSION__ < 320
+
+		reg_a = __builtin_lac(RefSpeed,0);
+		reg_b = __builtin_lac(MeasuredSpeed,0);
+		reg_a = __builtin_subab();
+		*ControlDifferencePtr = __builtin_sac(reg_a,0);
+		reg_a = __builtin_movsac(&ControlDifferencePtr, &x_prefetch, 2,
+				 &PIDCoefficientsPtr, &y_prefetch, 2, 0);
+		reg_a = __builtin_lac(ControlOutput, 0);
+		reg_a = __builtin_mac(x_prefetch,y_prefetch,
+                              &ControlDifferencePtr, &x_prefetch, 2,
+                              &PIDCoefficientsPtr, &y_prefetch, 2, 0);
+		reg_a = __builtin_mac(x_prefetch,y_prefetch,
+                              &ControlDifferencePtr, &x_prefetch, 2,
+                              &PIDCoefficientsPtr, &y_prefetch, 2, 0);
+		reg_a = __builtin_mac(x_prefetch,y_prefetch,
+                              &ControlDifferencePtr, &x_prefetch, 2,
+                              &PIDCoefficientsPtr, &y_prefetch, 2, 0);
         ControlOutput = __builtin_sac(reg_a, 0);
+
+	#else
+
+		//https://www.mikrocontroller.net/attachment/169069/SinusoidalBLDC_v1.2.c
+        reg_a = __builtin_lac(RefSpeed,0);
+		reg_b = __builtin_lac(MeasuredSpeed,0);
+		reg_a = __builtin_subab(reg_a,reg_b);
+		*ControlDifferencePtr = __builtin_sac(reg_a,0);
+		__builtin_movsac(&ControlDifferencePtr, &x_prefetch, 2, &PIDCoefficientsPtr, &y_prefetch, 2, 0, reg_b);
+		reg_a = __builtin_lac(ControlOutput, 0);
+
+		reg_a = __builtin_mac(reg_a,x_prefetch,y_prefetch,
+                              &ControlDifferencePtr, &x_prefetch, 2,
+                              &PIDCoefficientsPtr, &y_prefetch, 2, 0, reg_b);
+		reg_a = __builtin_mac(reg_a,x_prefetch,y_prefetch,
+                              &ControlDifferencePtr, &x_prefetch, 2,
+                              &PIDCoefficientsPtr, &y_prefetch, 2, 0, reg_b);
+		reg_a = __builtin_mac(reg_a,x_prefetch,y_prefetch,
+                              &ControlDifferencePtr, &x_prefetch, 2,
+                              &PIDCoefficientsPtr, &y_prefetch, 2, 0, reg_b);
+
+    	ControlOutput = __builtin_sac(reg_a, 0);
+
+	#endif
+
         CORCONbits.SATA = 0;    // Disable Saturation on Acc A
         // Store last 2 errors
         ControlDifference[2] = ControlDifference[1];
@@ -1095,7 +1134,7 @@ void SpeedControl(void) {/*
         #ifndef CLOSED_LOOP
                 ControlOutput = RefSpeed;
         #endif
-*/
+
         // ControlOutput will determine the motor required direction
         if (ControlOutput < 0)
                 Required_Direction = CCW;
