@@ -4,6 +4,7 @@
     <logicalFolder name="HeaderFiles"
                    displayName="Header Files"
                    projectFiles="true">
+      <itemPath>inc/svm.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -12,7 +13,8 @@
     <logicalFolder name="SourceFiles"
                    displayName="Source Files"
                    projectFiles="true">
-      <itemPath>Main.c</itemPath>
+      <itemPath>src/Main.c</itemPath>
+      <itemPath>src/SVM.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -20,6 +22,10 @@
       <itemPath>Makefile</itemPath>
     </logicalFolder>
   </logicalFolder>
+  <sourceRootList>
+    <Elem>src</Elem>
+    <Elem>inc</Elem>
+  </sourceRootList>
   <projectmakefile>Makefile</projectmakefile>
   <confs>
     <conf name="default" type="2">
@@ -28,7 +34,7 @@
         <targetDevice>dsPIC30F6015</targetDevice>
         <targetHeader></targetHeader>
         <targetPluginBoard></targetPluginBoard>
-        <platformTool></platformTool>
+        <platformTool>noID</platformTool>
         <languageToolchain>XC16</languageToolchain>
         <languageToolchainVersion>1.50</languageToolchainVersion>
         <platform>3</platform>
@@ -175,7 +181,7 @@
         <property key="warn-section-align" value="false"/>
       </C30-LD>
       <C30Global>
-        <property key="common-include-directories" value=""/>
+        <property key="common-include-directories" value="inc"/>
         <property key="dual-boot-partition" value="0"/>
         <property key="fast-math" value="false"/>
         <property key="generic-16-bit" value="false"/>
