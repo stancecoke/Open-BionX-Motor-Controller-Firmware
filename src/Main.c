@@ -5,39 +5,55 @@
 // by stancecoke
 
 
-#define SYS_FREQ        7370000L
-#define FCY             SYS_FREQ/4
-/*
-//*****************************************************************************
-// Device Config; generate using Window > PIC Memory Views > Configuration bits
-//*****************************************************************************
+#define SYS_FREQ        104000000L          //aus dem Blink-Beispiel 13MHz Quarz /2 * 16PLL
+#define FCY             SYS_FREQ/4          //aus dem Blink-Beispiel
+// DSPIC30F6015 Configuration Bit Settings
 
+// 'C' source line config statements
+// Nachgebaut aus den Werten der originalen Firmware, nur FCKSMEN passt nicht (Origial xb11)
 // FOSC
-#pragma config FOSFPR = FRC             // Oscillator (Internal Fast RC (No change to Primary Osc Mode bits))
-#pragma config FCKSMEN = CSW_FSCM_OFF   // Clock Switching and Monitor (Sw Disabled, Mon Disabled)
+#pragma config FOSFPR = HS2_PLL16       // Oscillator (HS2 w/PLL 16x)
+#pragma config FCKSMEN = CSW_FSCM_ON    // Clock Switching and Monitor (Sw Enabled, Mon Enabled)
 
 // FWDT
 #pragma config FWPSB = WDTPSB_16        // WDT Prescaler B (1:16)
 #pragma config FWPSA = WDTPSA_512       // WDT Prescaler A (1:512)
-#pragma config WDT = WDT_ON             // Watchdog Timer (Enabled)
+#pragma config WDT = WDT_OFF            // Watchdog Timer (Disabled)
 
 // FBORPOR
 #pragma config FPWRT = PWRT_64          // POR Timer Value (64ms)
-#pragma config BODENV = BORV20          // Brown Out Voltage (Reserved)
+#pragma config BODENV = BORV27          // Brown Out Voltage (2.7V)
 #pragma config BOREN = PBOR_ON          // PBOR Enable (Enabled)
+#pragma config LPOL = PWMxL_ACT_LO      // Low-side PWM Output Polarity (Active Low)
+#pragma config HPOL = PWMxH_ACT_HI      // High-side PWM Output Polarity (Active High)
+#pragma config PWMPIN = RST_IOPIN       // PWM Output Pin Reset (Control with PORT/TRIS regs)
 #pragma config MCLRE = MCLR_EN          // Master Clear Enable (Enabled)
+
+// FBS
+#pragma config BWRP = WR_PROTECT_BOOT_OFF// Boot Segment Program Memory Write Protect (Boot Segment Program Memory may be written)
+#pragma config BSS = NO_BOOT_CODE       // Boot Segment Program Flash Memory Code Protection (No Boot Segment)
+#pragma config EBS = NO_BOOT_EEPROM     // Boot Segment Data EEPROM Protection (No Boot EEPROM)
+#pragma config RBS = NO_BOOT_RAM        // Boot Segment Data RAM Protection (No Boot RAM)
+
+// FSS
+#pragma config SWRP = WR_PROT_SEC_OFF   // Secure Segment Program Write Protect (Disabled)
+#pragma config SSS = NO_SEC_CODE        // Secure Segment Program Flash Memory Code Protection (No Secure Segment)
+#pragma config ESS = NO_SEC_EEPROM      // Secure Segment Data EEPROM Protection (No Segment Data EEPROM)
+#pragma config RSS = NO_SEC_RAM         // Secure Segment Data RAM Protection (No Secure RAM)
 
 // FGS
 #pragma config GWRP = GWRP_OFF          // General Code Segment Write Protect (Disabled)
-//#pragma config GCP = CODE_PROT_OFF      // General Segment Code Protection (Disabled)
+#pragma config GCP = GSS_OFF            // General Segment Code Protection (Disabled)
 
 // FICD
 #pragma config ICS = ICS_PGD            // Comm Channel Select (Use PGC/EMUC and PGD/EMUD)
 
+// #pragma config statements should precede project file includes.
+// Use project enums instead of #define for ON and OFF.
+
 //*****************************************************************************
 // Device Config /end (paste config between these two)
 //*****************************************************************************
-*/
 
 
 #include <xc.h>
@@ -46,14 +62,15 @@
 #include <stdio.h>
 #include <adc10.h>
 #include "svm.h"
-/* Received data is stored in array Buf */
+
 
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
+/*
+ //aus dem BLDC Beispiel, ersetzt durch Pragmas
 _FOSC(CSW_FSCM_OFF & XT_PLL16);
 _FWDT(WDT_OFF);
 _FBORPOR(PBOR_ON & BORV20 & PWRT_64 & MCLR_EN);
-
+*/
 
 // 	Hurst Motor Terminals | MC LV PICDEM Board Connection
 // -----------------------|---------------------------------
@@ -70,7 +87,7 @@ typedef signed int SFRAC16;
 #define CLOSED_LOOP      // if defined the speed controller will be enabled
 #define PHASE_ADVANCE    // for extended speed ranges this should be defined
 
-//#define FCY  20000000	 // xtal = 5Mhz; PLLx16 -> 20 MIPS
+//#define FCY  104000000	 // xtal = 13Mhz/2; PLLx16 -> 104 MIPS, Schon oben aus dem Blink-Beispiel definiert
 #define FPWM 20000		 // 20 kHz, so that no audible noise is present.
 #define _10MILLISEC	 10  // Used as a timeout with no hall effect sensors
                          // transitions and Forcing steps according to the
@@ -107,7 +124,7 @@ typedef signed int SFRAC16;
 #define HALLC	4	// Connected to RB5
 #define CW	0		// Counter Clock Wise direction
 #define CCW	1		// Clock Wise direction
-#define SWITCH_S2	(!PORTCbits.RC14) // Push button S2
+#define SWITCH_S2	(!PORTDbits.RD8) // Push button S2 "dir" connector on BionX PCB
 
 // Period Calculation
 // Period = (TMRClock * 60) / (RPM * Motor_Poles)
@@ -388,11 +405,13 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt (void)
                    compensate non-symetries in the sine table used.
 ********************************************************************/
 
+// Hall 1 und 2 beide auf Change Notification Pins, daher dritte Interruptroutine nicht benötigt, aber Richtungserkennung muß aufgebohrt werden
+
 void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 {
 	IFS0bits.CNIF = 0;	// Clear interrupt flag
-	HallValue = (unsigned int)((PORTB >> 3) & 0x0007);	// Read halls
-	Sector = SectorTable[HallValue];	// Get Sector from table
+	HallValue = (unsigned int)((PORTD >> 4) & 0x0007);	// Read halls from RD5 to RD7
+	Sector = SectorTable[HallValue];	// Get Sector from table, SectorTable[] = {-1,4,2,3,0,5,1,-1};
 
     // This MUST be done for getting around the HW slow rate
 	if (Sector != LastSector)	
@@ -420,6 +439,10 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}
 		LastSector = Sector; // Update last sector
+        
+        printf("CNInterrupt, %d, %d\r\n",LastSector,Sector);
+        
+        //Hier erst mal Printfunktion einbauen um richtige Übergänge für Richtungserkennung zu testen.
 	}
 
 	return;
@@ -452,11 +475,11 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
   Note 2:          For Phase adjustment in CCW, an offset is added to 
                    compensate non-symetries in the sine table used.
 ********************************************************************/
-
-void __attribute__((interrupt, no_auto_psv)) _IC7Interrupt (void)
+// Hall 3 auf Pin RD5 = IC6 Input Capture 6, muß noch rausfinden, zu welchem Timer der gehört...
+void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
 {
-	IFS1bits.IC7IF = 0;	// Cleat interrupt flag
-	HallValue = (unsigned int)((PORTB >> 3) & 0x0007);	// Read halls
+	IFS1bits.IC6IF = 0;	// Cleat interrupt flag
+	HallValue = (unsigned int)((PORTD >> 3) & 0x0007);	// Read halls
 	Sector = SectorTable[HallValue];	// Get Sector from table
 
     // This MUST be done for getting around the HW slow rate
@@ -464,10 +487,10 @@ void __attribute__((interrupt, no_auto_psv)) _IC7Interrupt (void)
 	{
 		// Calculate Hall period corresponding to half an electrical cycle
 		PastCapture = ActualCapture;
-		ActualCapture = IC7BUF;
-		IC7BUF;
-		IC7BUF;
-		IC7BUF;
+		ActualCapture = IC6BUF; //4 mal lesen wie im Datenblatt beschrieben.
+		IC6BUF;
+		IC6BUF;
+		IC6BUF;
 
 		// Since a new sector is detected, clear variable that would stop 
         // the motor if stalled.
@@ -492,6 +515,9 @@ void __attribute__((interrupt, no_auto_psv)) _IC7Interrupt (void)
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}
 		LastSector = Sector; // Update last sector
+        printf("IC6Interrupt, %d, %d\r\n",LastSector,Sector);
+        
+        //hier auch erst mal ausdrucken für richtige Sektoren.
 	}
 
 	return;
@@ -522,7 +548,7 @@ void __attribute__((interrupt, no_auto_psv)) _IC7Interrupt (void)
   Note 2:          For Phase adjustment in CCW, an offset is added to 
                    compensate non-symetries in the sine table used.
 ********************************************************************/
-
+/* wird nicht benötigt, da Hallsensor auf anderem Pin
 void __attribute__((interrupt, no_auto_psv)) _IC8Interrupt (void)
 {	
 	IFS1bits.IC8IF = 0;	// Cleat interrupt flag
@@ -559,7 +585,7 @@ void __attribute__((interrupt, no_auto_psv)) _IC8Interrupt (void)
 
 	return;
 }
-
+*/
 /*********************************************************************
   Function:        void __attribute__((__interrupt__)) _PWMInterrupt (void)
 
@@ -649,8 +675,8 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt (void)
 char Buf[80];
 
 int i=0, j=0, ADCValues[3];
-int __C30_UART = 2;
-/* This is UART1 transmit ISR */
+int __C30_UART = 2; //leitet Printbefehl auf UART2 um.
+/* This is UART2 transmit ISR */
 void __attribute__((__interrupt__, no_auto_psv)) _U2TXInterrupt(void)
 
 {
@@ -658,7 +684,7 @@ void __attribute__((__interrupt__, no_auto_psv)) _U2TXInterrupt(void)
 }
 
 
-// This is UART1 receive ISR done
+// This is UART2 receive ISR done
 void __attribute__((__interrupt__, no_auto_psv)) _U2RXInterrupt(void)
 {
  IFS1bits.U2RXIF = 0;
@@ -674,6 +700,7 @@ void __attribute__((__interrupt__, no_auto_psv)) _U2RXInterrupt(void)
   }
 } 
 }
+/*wird nicht mehr benötigt, da ADC über Timer getriggert.
 unsigned int read_analog_channel(int channel)
 {
     ADCHS = channel;          // Select the requested channel
@@ -682,7 +709,7 @@ unsigned int read_analog_channel(int channel)
     ADCON1bits.SAMP = 0;      // start Converting
     while (!ADCON1bits.DONE); // Should take 12 * Tad = 1.2us
     return ADCBUF0;
-}
+}*/
 int main(void) {
     
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -694,7 +721,7 @@ int main(void) {
 	InitMCPWM();	// Initialize PWM @ 20 kHz, center aligned, 1 us of 
                     // deadtime
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX       
-    _TRISD8 = 0; // set D3 to output
+   /* _TRISD8 = 0; // set D3 to output alter Teil aus Blink und UART-Beispiel
     
     _LATD8 = 1;
     // Make RD0-3 digital outputs
@@ -707,6 +734,7 @@ int main(void) {
     ADCON2 = 0;          // Voltage reference from AVDD and AVSS
     ADCON3 = 0x0005;     // Manual Sample, ADCS=5 -> Tad = 3*Tcy = 0.1us
     ADCON1bits.ADON = 1; // Turn ADC ON
+    */
     /* Data to be transmitted using UART communication module */
 char Txdata[30];
 /* Holds the value of baud register */
@@ -767,7 +795,7 @@ Also Enable loopback mode */
 		}
         
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX       
-           
+       /*    alter Teil aus Blink und UART Beispiel
         _LATD8 = 0;
     
        // printf("%d, %d, %d, %d, %d, %d, %d, %d, %d, %d\r\n", PORTD&1,PORTD&(1<<10),PORTD&(1<<11),PORTD&(1<<3),PORTD&(1<<4),PORTD&(1<<5),PORTD&(1<<6),PORTD&(1<<7),PORTD&(1<<8),PORTD&(1<<9));
@@ -780,12 +808,13 @@ Also Enable loopback mode */
         __delay_ms(300);
                 
         ClrWdt();
+        */
     }
     
  /* Turn off UART module */
     CloseUART2();
     return 0;
-}
+} //end of main loop
 
 /*********************************************************************
   Function:        void ChargeBootstraps(void)
@@ -810,7 +839,8 @@ Also Enable loopback mode */
 
 void ChargeBootstraps(void)
 {
-	unsigned int i;
+	/*wird nicht benötigt, da Halfbridge Driver S2003 vorhanden.
+     * unsigned int i;
 	OVDCON = 0x0015;	// Turn ON low side transistors to charge
 	for (i = 0; i < 33330; i++) // 10 ms Delay at 20 MIPs
 		;
@@ -821,6 +851,7 @@ void ChargeBootstraps(void)
 	OVDCON = 0x3F00;	// Configure PWM0-5 to be governed by PWM module
 	PWMCON2bits.UDIS = 0;
 	return;
+    */
 }
 
 /*********************************************************************
@@ -861,7 +892,7 @@ void RunMotor(void)
 
 	// Initialize direction with required direction
 	// Remember that ADC is not stopped.
-	HallValue = (unsigned int)((PORTB >> 3) & 0x0007);	// Read halls
+	HallValue = (unsigned int)((PORTD >> 4) & 0x0007);	// Read halls
 	LastSector = Sector = SectorTable[HallValue];	// Initialize Sector 
                                                     // variable
 
@@ -897,9 +928,9 @@ void RunMotor(void)
 	// enable all interrupts
 	__asm__ volatile ("DISI #0x3FFF");
 	IEC0bits.T1IE = 1;	// Enable interrupts for timer 1
-	IEC0bits.CNIE = 1;	// Enable interrupts on CN5
-	IEC1bits.IC7IE = 1;	// Enable interrupts on IC7
-	IEC1bits.IC8IE = 1;	// Enable interrupts on IC8
+	IEC0bits.CNIE = 1;	// Enable interrupts on CN5 Braucht es hier für CN15 CN16 was anderes?!
+	IEC1bits.IC6IE = 1;	// Enable interrupts on IC6 
+	//IEC1bits.IC8IE = 1;	// Enable interrupts on IC8 wird nicht gebraucht, da Hall nicht an IC8
 	IEC2bits.PWMIE = 1;	// Enable PWM interrupts
         DISICNT = 0;
 
@@ -937,8 +968,8 @@ void StopMotor(void)
 	__asm__ volatile ("DISI #0x3FFF");
 	IEC0bits.T1IE = 0;	// Disable interrupts for timer 1
 	IEC0bits.CNIE = 0;	// Disable interrupts on CN5
-	IEC1bits.IC7IE = 0;	// Disable interrupts on IC7
-	IEC1bits.IC8IE = 0;	// Disable interrupts on IC8
+	IEC1bits.IC6IE = 0;	// Disable interrupts on IC7
+	//IEC1bits.IC8IE = 0;	// Disable interrupts on IC8
 	IEC2bits.PWMIE = 0;	// Disable PWM interrupts
         DISICNT = 0;
 
@@ -1168,7 +1199,7 @@ void SpeedControl(void) {
 
 void ForceCommutation(void)
 {
-	HallValue = (unsigned int)((PORTB >> 3) & 0x0007);	// Read halls
+	HallValue = (unsigned int)((PORTD >> 4) & 0x0007);	// Read halls
 	Sector = SectorTable[HallValue];	// Read sector based on halls
 	if (Sector != -1)	// If the sector is invalid don't do anything
 	{
@@ -1211,11 +1242,11 @@ void ForceCommutation(void)
 void InitADC10(void)
 {
 
-	ADPCFG = 0x0038;				// RB3, RB4, and RB5 are digital
+	//ADPCFG = 0x0038;				// RB3, RB4, and RB5 are digital Keine digitalen Signale auf Port B
 	ADCON1 = 0x036E;				// PWM starts conversion
 									// Signed fractional conversions
 	ADCON2 = 0x0000;				 									
-	ADCHS = 0x0002;					// Pot is connected to AN2
+	ADCHS = 0x000A;					// Pot is connected to AN10, AN10 liegt an Headern über 47kOhm Widerstand
 									 
 	ADCON3 = 0x0003;				 
 	IFS0bits.ADIF = 0;				// Clear ISR flag
@@ -1290,18 +1321,19 @@ void InitICandCN(void)
 	//Hall C -> IC8. Hall C is only used for commutation.
 	
 	// Init Input change notification 5
-	TRISB |= 0x38;		// Ensure that hall connections are inputs 
+	TRISD |= 0x70;		// Ensure that hall connections are inputs 
 	CNPU1 = 0;	    	// Disable all CN pull ups
-	CNEN1 = 0x20;		// Enable CN5
+	CNEN1 = 0x4000;		// Enable CN15
+    CNEN2 = 0x0001;		// Enable CN15
 	IFS0bits.CNIF = 0;	// Clear interrupt flag
 
-	// Init Input Capture 7
-	IC7CON = 0x0001;	// Input capture every edge with interrupts and TMR3
-	IFS1bits.IC7IF = 0;	// Clear interrupt flag
+	// Init Input Capture 6
+	IC6CON = 0x0001;	// Input capture every edge with interrupts and TMR3, ICTMR = 0 für Timer3
+	IFS1bits.IC6IF = 0;	// Clear interrupt flag
 
 	// Init Input Capture 8
-	IC8CON = 0x0001;	// Input capture every edge with interrupts and TMR3
-	IFS1bits.IC8IF = 0;	// Clear interrupt flag
+	//IC8CON = 0x0001;	// Input capture every edge with interrupts and TMR3
+	//IFS1bits.IC8IF = 0;	// Clear interrupt flag
 
 	return;
 }
@@ -1329,7 +1361,7 @@ void InitTMR1(void)
 {
 	T1CON = 0x0020;			// internal Tcy/64 clock
 	TMR1 = 0;
-	PR1 = 313;				// 1 ms interrupts for 20 MIPS
+	PR1 = 313;				// 1 ms interrupts for 20 MIPS ! Passt natürlich nicht zu 106 MIPS
 	T1CONbits.TON = 1;		// turn on timer 1 
 	return;
 }
@@ -1380,10 +1412,10 @@ void InitTMR3(void)
 
 void InitUserInt(void)
 {
-	TRISC |= 0x4000;	// S2/RC14 as input
+	_TRISD8 = 1;	// dir RD8 as input
 	// Analog pin for POT already initialized in ADC init subroutine
-	PORTF = 0x0008;		// RS232 Initial values
-	TRISF = 0xFFF7;		// TX as output
+	//PORTF = 0x0008;		// RS232 Initial values UART in main initialisiert
+	//TRISF = 0xFFF7;		// TX as output
 	return;
 }
 
