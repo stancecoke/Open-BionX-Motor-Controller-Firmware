@@ -12,6 +12,7 @@
 // 'C' source line config statements
 // Nachgebaut aus den Werten der originalen Firmware, nur FCKSMEN passt nicht (Origial xb11)
 // FOSC
+
 #pragma config FOSFPR = HS2_PLL16       // Oscillator (HS2 w/PLL 16x)
 #pragma config FCKSMEN = CSW_FSCM_ON    // Clock Switching and Monitor (Sw Enabled, Mon Enabled)
 
@@ -21,7 +22,7 @@
 #pragma config WDT = WDT_OFF            // Watchdog Timer (Disabled)
 
 // FBORPOR
-#pragma config FPWRT = PWRT_64          // POR Timer Value (64ms)
+#pragma config FPWRT = PWRT_64           // POR Timer Value (64ms)
 #pragma config BODENV = BORV27          // Brown Out Voltage (2.7V)
 #pragma config BOREN = PBOR_ON          // PBOR Enable (Enabled)
 #pragma config LPOL = PWMxL_ACT_LO      // Low-side PWM Output Polarity (Active Low)
@@ -417,7 +418,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt (void)
 void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 {
 	IFS0bits.CNIF = 0;	// Clear interrupt flag
-	HallValue = (unsigned int)((PORTD >> 4) & 0x0007);	// Read halls from RD5 to RD7
+	HallValue = (unsigned int)((PORTD >> 5) & 0x0007);	// Read halls from RD5 to RD7
 	Sector = SectorTable[HallValue];	// Get Sector from table, SectorTable[] = {-1,4,2,3,0,5,1,-1};
 
     // This MUST be done for getting around the HW slow rate
@@ -428,10 +429,13 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 		MotorStalledCounter = 0;
 
 		// Motor current direction is computed based on Sector
-		if ((Sector == 5) || (Sector == 2))	
-			Current_Direction = CCW;
-		else
+		if ((LastSector == 4 && Sector==5) 
+                || (LastSector == 5 && Sector==0)
+                || (LastSector == 1 && Sector==2)
+                || (LastSector == 2 && Sector==3))	
 			Current_Direction = CW;
+		else
+			Current_Direction = CCW;
 
         // Motor commutation is actually based on the required direction, not
         // the current dir. This allows driving the motor in four quadrants
@@ -444,11 +448,10 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 			// For CCW an offset must be added to compensate difference in 
             // symmetry of the sine table used for CW and CCW
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
-		}
-		LastSector = Sector; // Update last sector
+		}		
         
-        printf("CNInterrupt, %d, %d, %d\r\n",LastSector, Sector, RefSpeed);
-        
+        //printf("CNInterrupt, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), LastSector, Sector, RefSpeed);
+        LastSector = Sector; // Update last sector
         //Hier erst mal Printfunktion einbauen um richtige Übergänge für Richtungserkennung zu testen.
 	}
 
@@ -486,7 +489,7 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
 {
 	IFS1bits.IC6IF = 0;	// Cleat interrupt flag
-	HallValue = (unsigned int)((PORTD >> 3) & 0x0007);	// Read halls
+	HallValue = (unsigned int)((PORTD >> 5) & 0x0007);	// Read halls
 	Sector = SectorTable[HallValue];	// Get Sector from table
 
     // This MUST be done for getting around the HW slow rate
@@ -504,10 +507,11 @@ void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
 		MotorStalledCounter = 0;
 
 		// Motor current direction is computed based on Sector
-		if ((Sector == 3) || (Sector == 0))
-			Current_Direction = CCW;
-		else
+		if ((LastSector == 3 && Sector==4) 
+                || (LastSector == 0 && Sector==1))
 			Current_Direction = CW;
+		else
+			Current_Direction = CCW;
 
         // Motor commutation is actually based on the required direction, not
         // the current dir. This allows driving the motor in four quadrants
@@ -521,9 +525,9 @@ void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
             // symmetry of the sine table used for CW and CCW
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}
-		LastSector = Sector; // Update last sector
-        printf("IC6Interrupt, %d, %d, %d\r\n",LastSector, Sector, RefSpeed);
-        
+		
+        //printf("IC6Interrupt,  %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), LastSector, Sector, RefSpeed);
+        LastSector = Sector; // Update last sector
         //hier auch erst mal ausdrucken für richtige Sektoren.
 	}
 
@@ -816,7 +820,7 @@ Also Enable loopback mode */
     
     if(j>50){
         j=0;
-        printf("Mainloop, %d, %d, %d, %d, %d\r\n",Flags.MotorRunning, CSW_FSCM_ON, Sector, RefSpeed, Period );
+        printf("Mainloop, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), LastSector, Sector, RefSpeed, Period );
     }
     }
     
@@ -901,7 +905,7 @@ void RunMotor(void)
 
 	// Initialize direction with required direction
 	// Remember that ADC is not stopped.
-	HallValue = (unsigned int)((PORTD >> 4) & 0x0007);	// Read halls
+	HallValue = (unsigned int)((PORTD >> 5) & 0x0007);	// Read halls
 	LastSector = Sector = SectorTable[HallValue];	// Initialize Sector 
                                                     // variable
 
@@ -1208,7 +1212,7 @@ void SpeedControl(void) {
 
 void ForceCommutation(void)
 {
-	HallValue = (unsigned int)((PORTD >> 4) & 0x0007);	// Read halls
+	HallValue = (unsigned int)((PORTD >> 5) & 0x0007);	// Read halls
 	Sector = SectorTable[HallValue];	// Read sector based on halls
 	if (Sector != -1)	// If the sector is invalid don't do anything
 	{
