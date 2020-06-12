@@ -5,8 +5,8 @@
 // by stancecoke
 
 
-#define SYS_FREQ        104000000L          //aus dem Blink-Beispiel 13MHz Quarz /2 * 16PLL
-#define FCY             SYS_FREQ/4          //aus dem Blink-Beispiel
+//#define SYS_FREQ        104000000L          //aus dem Blink-Beispiel 13MHz Quarz /2 * 16PLL
+//#define FCY             SYS_FREQ/4          //aus dem Blink-Beispiel
 // DSPIC30F6015 Configuration Bit Settings
 
 // 'C' source line config statements
@@ -87,7 +87,7 @@ typedef signed int SFRAC16;
 #define CLOSED_LOOP      // if defined the speed controller will be enabled
 #define PHASE_ADVANCE    // for extended speed ranges this should be defined
 
-//#define FCY  104000000	 // xtal = 13Mhz/2; PLLx16 -> 104 MIPS, Schon oben aus dem Blink-Beispiel definiert
+#define FCY  26000000	 // xtal = 13Mhz/2; PLLx16 /4 -> 26 MIPS, Schon oben aus dem Blink-Beispiel definiert
 #define FPWM 20000		 // 20 kHz, so that no audible noise is present.
 #define _10MILLISEC	 10  // Used as a timeout with no hall effect sensors
                          // transitions and Forcing steps according to the
@@ -175,6 +175,11 @@ int PhaseValues[6] = {PHASE_ZERO, PHASE_ONE, PHASE_TWO, PHASE_THREE, PHASE_FOUR,
 // pointer when energizing the motor in CCW. This is done to compensate an
 // asymetry of the sinewave
 int PhaseOffset = 4100;
+char Buf[80];
+
+int i=0, j=0, ADCValues[3];
+int __C30_UART = 2; //leitet Printbefehl auf UART2 um.
+/* This is UART2 transmit ISR */
 
 // Flags used for the application
 struct 
@@ -278,6 +283,8 @@ SFRAC16 _MAX_PH_ADV = MAX_PH_ADV;
 void __attribute__((interrupt, no_auto_psv)) _T1Interrupt (void)
 {
 	IFS0bits.T1IF = 0;
+    j++;
+    
 	Period = ActualCapture - PastCapture;  // This is an UNsigned substraction
                                            // to get the Period between one 
                                            // hall effect sensor transition
@@ -440,7 +447,7 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 		}
 		LastSector = Sector; // Update last sector
         
-        printf("CNInterrupt, %d, %d\r\n",LastSector,Sector);
+        printf("CNInterrupt, %d, %d, %d\r\n",LastSector, Sector, RefSpeed);
         
         //Hier erst mal Printfunktion einbauen um richtige Übergänge für Richtungserkennung zu testen.
 	}
@@ -515,7 +522,7 @@ void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}
 		LastSector = Sector; // Update last sector
-        printf("IC6Interrupt, %d, %d\r\n",LastSector,Sector);
+        printf("IC6Interrupt, %d, %d, %d\r\n",LastSector, Sector, RefSpeed);
         
         //hier auch erst mal ausdrucken für richtige Sektoren.
 	}
@@ -672,11 +679,7 @@ void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt (void)
 
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-char Buf[80];
 
-int i=0, j=0, ADCValues[3];
-int __C30_UART = 2; //leitet Printbefehl auf UART2 um.
-/* This is UART2 transmit ISR */
 void __attribute__((__interrupt__, no_auto_psv)) _U2TXInterrupt(void)
 
 {
@@ -712,16 +715,7 @@ unsigned int read_analog_channel(int channel)
 }*/
 int main(void) {
     
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-    InitUserInt();	// Initialize User Interface I/Os
-	InitADC10();	// Initialize ADC to be signed fractional
-	InitTMR1();		// Initialize TMR1 for 1 ms periodic ISR
-	InitTMR3();		// Initialize TMR3 for timebase of capture
-	InitICandCN();	// Initialize Hall sensor inputs ISRs	
-	InitMCPWM();	// Initialize PWM @ 20 kHz, center aligned, 1 us of 
-                    // deadtime
-//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX       
-   /* _TRISD8 = 0; // set D3 to output alter Teil aus Blink und UART-Beispiel
+  /* _TRISD8 = 0; // set D3 to output alter Teil aus Blink und UART-Beispiel
     
     _LATD8 = 1;
     // Make RD0-3 digital outputs
@@ -751,7 +745,7 @@ unsigned int U2STAvalue;
  UART_TX_INT_DIS & UART_TX_INT_PR2);
 /* Configure UART1 module to transmit 8 bit data with one stopbit.
 Also Enable loopback mode */
- baudvalue = 5;
+ baudvalue = 10; //(FCY/(16*Baudrate))-1
  U2MODEvalue = UART_EN & UART_IDLE_CON &
  UART_DIS_WAKE & UART_EN_LOOPBACK &
  UART_EN_ABAUD & UART_NO_PAR_8BIT &
@@ -763,11 +757,21 @@ Also Enable loopback mode */
  UART_RX_OVERRUN_CLEAR;
  OpenUART2(U2MODEvalue, U2STAvalue, baudvalue);
     //welcome message
-    sprintf(Txdata, "BionX OSF v0.0\r\n");
+    sprintf(Txdata, "BionX OSF v0.1\r\n");
     putsUART2 ((unsigned int *)Txdata);
     /* Wait for transmission to complete */
     while(BusyUART2());
-    
+
+//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+    InitUserInt();	// Initialize User Interface I/Os
+	InitADC10();	// Initialize ADC to be signed fractional
+	InitTMR1();		// Initialize TMR1 for 1 ms periodic ISR
+	InitTMR3();		// Initialize TMR3 for timebase of capture
+	InitICandCN();	// Initialize Hall sensor inputs ISRs	
+	InitMCPWM();	// Initialize PWM @ 20 kHz, center aligned, 1 us of 
+                    // deadtime
+//XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX       
+     
 
 /* Read all the data remaining in receive buffer which are unread 
  while(DataRdyUART1())
@@ -779,9 +783,9 @@ Also Enable loopback mode */
 
     while(1)
     {   
-        
+        if ((!Flags.MotorRunning))RunMotor();
  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-	if ((SWITCH_S2) && (!Flags.MotorRunning))
+	/*if ((SWITCH_S2) && (!Flags.MotorRunning))
 		{
 			while(SWITCH_S2);
 			RunMotor();	// Run motor if push button is pressed and motor is
@@ -792,7 +796,7 @@ Also Enable loopback mode */
 			while(SWITCH_S2);
 			StopMotor();// Stop motor if push button is pressed and motor is 
                         // running
-		}
+		}*/
         
 //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX       
        /*    alter Teil aus Blink und UART Beispiel
@@ -809,6 +813,11 @@ Also Enable loopback mode */
                 
         ClrWdt();
         */
+    
+    if(j>50){
+        j=0;
+        printf("Mainloop, %d, %d, %d, %d, %d\r\n",Flags.MotorRunning, CSW_FSCM_ON, Sector, RefSpeed, Period );
+    }
     }
     
  /* Turn off UART module */
@@ -1241,7 +1250,7 @@ void ForceCommutation(void)
 
 void InitADC10(void)
 {
-
+    printf("ADC init\r\n");
 	//ADPCFG = 0x0038;				// RB3, RB4, and RB5 are digital Keine digitalen Signale auf Port B
 	ADCON1 = 0x036E;				// PWM starts conversion
 									// Signed fractional conversions
@@ -1280,7 +1289,8 @@ void InitADC10(void)
 
 void InitMCPWM(void)
 {
-	TRISE = 0x0100;	// PWM pins as outputs, and FLTA as input
+	printf("PWM init\r\n");
+    TRISE = 0x0100;	// PWM pins as outputs, and FLTA as input
 	PTPER = (FCY/FPWM - 1) >> 1;	// Compute Period based on CPU speed and 
                                     // required PWM frequency (see defines)
 	OVDCON = 0x0000;	// Disable all PWM outputs.
@@ -1316,6 +1326,7 @@ void InitMCPWM(void)
 
 void InitICandCN(void)
 {
+    printf("Hall interrupt init\r\n");
 	//Hall A -> CN5. Hall A is only used for commutation.
 	//Hall B -> IC7. Hall B is used for Speed measurement and commutation.
 	//Hall C -> IC8. Hall C is only used for commutation.
@@ -1359,6 +1370,7 @@ void InitICandCN(void)
 
 void InitTMR1(void)
 {
+    printf("Timer1 init\r\n");
 	T1CON = 0x0020;			// internal Tcy/64 clock
 	TMR1 = 0;
 	PR1 = 313;				// 1 ms interrupts for 20 MIPS ! Passt natürlich nicht zu 106 MIPS
@@ -1385,7 +1397,8 @@ void InitTMR1(void)
 
 void InitTMR3(void)
 {
-	T3CON = 0x0020;			// internal Tcy/64 clock
+	printf("Timer3 init\r\n");
+    T3CON = 0x0020;			// internal Tcy/64 clock
 	TMR3 = 0;
 	PR3 = 0xFFFF;
 	T3CONbits.TON = 1;		// turn on timer 3 
@@ -1412,7 +1425,8 @@ void InitTMR3(void)
 
 void InitUserInt(void)
 {
-	_TRISD8 = 1;	// dir RD8 as input
+	printf("UserInt init\r\n");
+    _TRISD8 = 1;	// dir RD8 as input
 	// Analog pin for POT already initialized in ADC init subroutine
 	//PORTF = 0x0008;		// RS232 Initial values UART in main initialisiert
 	//TRISF = 0xFFF7;		// TX as output
