@@ -100,7 +100,7 @@ typedef signed int SFRAC16;
 // These Phase values represent the base Phase value of the sinewave for each
 // one of the sectors (each sector is a translation of the hall effect sensors
 // reading 
-#define PHASE_ZERO 	57344
+#define PHASE_ZERO 	57344-5500
 #define PHASE_ONE	((PHASE_ZERO + 65536/6) % 65536)
 #define PHASE_TWO	((PHASE_ONE + 65536/6) % 65536)
 #define PHASE_THREE	((PHASE_TWO + 65536/6) % 65536)
@@ -225,7 +225,7 @@ unsigned char Required_Direction;	// Required mechanical motor direction of
 
 // Variables containing the Period of half an electrical cycle, which is an 
 // interrupt each edge of one of the hall sensor input
-unsigned int PastCapture, ActualCapture, Period; 
+unsigned int PastCapture, ActualCapture, Period, IC6_Flag; 
 // Used as a temporal variable to perform a fractional divide operation in 
 // assembly
 SFRAC16 _MINPERIOD = MINPERIOD - 1;
@@ -525,8 +525,8 @@ void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
             // symmetry of the sine table used for CW and CCW
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}
-		
-        printf("IC6Interrupt, %d, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), Sector, PastCapture, ActualCapture, RefSpeed, Current_Direction);
+		IC6_Flag=1;
+        //printf("IC6Interrupt, %d, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), Sector, PastCapture, ActualCapture, RefSpeed, Current_Direction);
         LastSector = Sector; // Update last sector
         //hier auch erst mal ausdrucken für richtige Sektoren.
 	}
@@ -745,7 +745,7 @@ unsigned int U2STAvalue;
 /* Turn off UART1module */
  CloseUART2();
 /* Configure uart1 receive and transmit interrupt */
- ConfigIntUART2(UART_RX_INT_EN & UART_RX_INT_PR6 &
+ ConfigIntUART2(UART_RX_INT_DIS & UART_RX_INT_PR0 &
  UART_TX_INT_DIS & UART_TX_INT_PR2);
 /* Configure UART1 module to transmit 8 bit data with one stopbit.
 Also Enable loopback mode */
@@ -820,7 +820,8 @@ Also Enable loopback mode */
     
     if(j>500){
         j=0;
-        //printf("Mainloop, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), Sector, OSCCON, RefSpeed, Period );
+        printf("Mainloop, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), Sector, Current_Direction, RefSpeed, Period );
+        if(IC6_Flag)IC6_Flag=0;
     }
     }
     
@@ -891,7 +892,7 @@ void ChargeBootstraps(void)
 void RunMotor(void)
 {
 	
-    printf("Run Motor\r\n");
+    //printf("Run Motor\r\n");
     ChargeBootstraps();
 	// init variables
 	ControlDifference[0] = 0;	// Error at K	(most recent)
@@ -938,8 +939,8 @@ void RunMotor(void)
 	// Clear all interrupts flags
 	IFS0bits.T1IF = 0;	// Clear timer 1 flag
 	IFS0bits.CNIF = 0;	// Clear interrupt flag
-	IFS1bits.IC7IF = 0;	// Clear interrupt flag
-	IFS1bits.IC8IF = 0;	// Clear interrupt flag
+	IFS1bits.IC6IF = 0;	// Clear interrupt flag
+	//IFS1bits.IC8IF = 0;	// Clear interrupt flag
 	IFS2bits.PWMIF = 0;	// Clear interrupt flag
 
 	// enable all interrupts
@@ -985,7 +986,7 @@ void StopMotor(void)
 	__asm__ volatile ("DISI #0x3FFF");
 	IEC0bits.T1IE = 0;	// Disable interrupts for timer 1
 	IEC0bits.CNIE = 0;	// Disable interrupts on CN5
-	IEC1bits.IC6IE = 0;	// Disable interrupts on IC7
+	IEC1bits.IC6IE = 0;	// Disable interrupts on IC6
 	//IEC1bits.IC8IE = 0;	// Disable interrupts on IC8
 	IEC2bits.PWMIE = 0;	// Disable PWM interrupts
         DISICNT = 0;
@@ -1358,7 +1359,7 @@ void InitICandCN(void)
 	IFS0bits.CNIF = 0;	// Clear interrupt flag
 
 	// Init Input Capture 6
-    IPC1bits.T3IP = 7; //Set Timer3 auf höchste Priorität
+    IPC7bits.IC6IP = 7; //Input Capture 6 auf höchste Priorität
 	IC6CON = 0x0001;	// Input capture every edge with interrupts and TMR3, ICTMR = 0 für Timer3
 	IFS1bits.IC6IF = 0;	// Clear interrupt flag
 
