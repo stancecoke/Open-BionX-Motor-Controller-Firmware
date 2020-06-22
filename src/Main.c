@@ -14,7 +14,7 @@
 // FOSC
 
 #pragma config FOSFPR = HS2_PLL16       // Oscillator (HS2 w/PLL 16x)
-#pragma config FCKSMEN = CSW_FSCM_ON    // Clock Switching and Monitor (Sw Enabled, Mon Enabled)
+#pragma config FCKSMEN = CSW_FSCM_OFF    // Clock Switching and Monitor (Sw Enabled, Mon Enabled)
 
 // FWDT
 #pragma config FWPSB = WDTPSB_16        // WDT Prescaler B (1:16)
@@ -85,8 +85,8 @@ _FBORPOR(PBOR_ON & BORV20 & PWRT_64 & MCLR_EN);
 
 typedef signed int SFRAC16;
 
-#define CLOSED_LOOP      // if defined the speed controller will be enabled
-#define PHASE_ADVANCE    // for extended speed ranges this should be defined
+//#define CLOSED_LOOP      // if defined the speed controller will be enabled
+//#define PHASE_ADVANCE    // for extended speed ranges this should be defined
 
 #define FCY  26000000	 // xtal = 13Mhz/2; PLLx16 /4 -> 26 MIPS, Schon oben aus dem Blink-Beispiel definiert
 #define FPWM 20000		 // 20 kHz, so that no audible noise is present.
@@ -214,7 +214,7 @@ unsigned int MotorStalledCounter = 0; // This variable gets incremented each
 // This array translates the hall state value read from the digital I/O to the
 // proper sector.  Hall values of 0 or 7 represent illegal values and therefore
 // return -1.
-char SectorTable[] = {-1,4,2,3,0,5,1,-1};
+char SectorTable[] = {-1,5,3,4,1,0,2,-1}; //{-1,4,2,3,0,5,1,-1};
 
 unsigned char Current_Direction;	// Current mechanical motor direction of 
                                     // rotation Calculated in halls interrupts
@@ -429,10 +429,10 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 		MotorStalledCounter = 0;
 
 		// Motor current direction is computed based on Sector
-		if ((LastSector == 4 && Sector==5) 
-                || (LastSector == 5 && Sector==0)
-                || (LastSector == 1 && Sector==2)
-                || (LastSector == 2 && Sector==3))	
+		if ((LastSector == 0 && Sector == 1) 
+                || (LastSector == 2 && Sector == 3)
+                || (LastSector == 3 && Sector == 4)
+                || (LastSector == 5 && Sector == 0))	
 			Current_Direction = CW;
 		else
 			Current_Direction = CCW;
@@ -450,7 +450,7 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}		
         
-        //printf("CNInterrupt, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), LastSector, Sector, RefSpeed);
+        //printf("CNInterrupt, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), Sector, Phase, RefSpeed, Current_Direction);
         LastSector = Sector; // Update last sector
         //Hier erst mal Printfunktion einbauen um richtige Übergänge für Richtungserkennung zu testen.
 	}
@@ -507,8 +507,8 @@ void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
 		MotorStalledCounter = 0;
 
 		// Motor current direction is computed based on Sector
-		if ((LastSector == 3 && Sector==4) 
-                || (LastSector == 0 && Sector==1))
+		if ((LastSector == 1 && Sector == 2) 
+                || (LastSector == 4 && Sector== 5))
 			Current_Direction = CW;
 		else
 			Current_Direction = CCW;
@@ -526,7 +526,7 @@ void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}
 		
-        //printf("IC6Interrupt,  %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), LastSector, Sector, RefSpeed);
+        printf("IC6Interrupt, %d, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), Sector, PastCapture, ActualCapture, RefSpeed, Current_Direction);
         LastSector = Sector; // Update last sector
         //hier auch erst mal ausdrucken für richtige Sektoren.
 	}
@@ -749,7 +749,7 @@ unsigned int U2STAvalue;
  UART_TX_INT_DIS & UART_TX_INT_PR2);
 /* Configure UART1 module to transmit 8 bit data with one stopbit.
 Also Enable loopback mode */
- baudvalue = 10; //(FCY/(16*Baudrate))-1
+ baudvalue = 168; //(FCY/(16*Baudrate))-1
  U2MODEvalue = UART_EN & UART_IDLE_CON &
  UART_DIS_WAKE & UART_EN_LOOPBACK &
  UART_EN_ABAUD & UART_NO_PAR_8BIT &
@@ -818,9 +818,9 @@ Also Enable loopback mode */
         ClrWdt();
         */
     
-    if(j>50){
+    if(j>500){
         j=0;
-        printf("Mainloop, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), LastSector, Sector, RefSpeed, Period );
+        //printf("Mainloop, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), Sector, OSCCON, RefSpeed, Period );
     }
     }
     
@@ -852,11 +852,13 @@ Also Enable loopback mode */
 
 void ChargeBootstraps(void)
 {
-	/*wird nicht benötigt, da Halfbridge Driver S2003 vorhanden.
-     * unsigned int i;
-	OVDCON = 0x0015;	// Turn ON low side transistors to charge
-	for (i = 0; i < 33330; i++) // 10 ms Delay at 20 MIPs
-		;
+	//wird nicht benötigt, da Halfbridge Driver S2003 vorhanden.
+    // * unsigned int i;
+   // printf("charge Bootstrap before loop\r\n");
+	/*OVDCON = 0x0015;	// Turn ON low side transistors to charge
+	for (j = 0; j < 33330; j++) // 10 ms Delay at 20 MIPs
+		;*/
+   // printf("charge Bootstrap before after\r\n");
 	PWMCON2bits.UDIS = 1;
 	PDC1 = PTPER;	// Initialize as 0 voltage
 	PDC2 = PTPER;	// Initialize as 0 voltage
@@ -864,7 +866,7 @@ void ChargeBootstraps(void)
 	OVDCON = 0x3F00;	// Configure PWM0-5 to be governed by PWM module
 	PWMCON2bits.UDIS = 0;
 	return;
-    */
+    
 }
 
 /*********************************************************************
@@ -888,7 +890,9 @@ void ChargeBootstraps(void)
 
 void RunMotor(void)
 {
-	ChargeBootstraps();
+	
+    printf("Run Motor\r\n");
+    ChargeBootstraps();
 	// init variables
 	ControlDifference[0] = 0;	// Error at K	(most recent)
 	ControlDifference[1] = 0;	// Error at K-1
@@ -1306,7 +1310,18 @@ void InitMCPWM(void)
 	PDC3 = PTPER;	    // Initialize as 0 voltage
 	SEVTCMP = 1;	    // Enable triggering for ADC
 	PWMCON2 = 0x0F02;	// 16 postscale values, for achieving 20 kHz
+    //disable fault detection
+    _FAEN1=0;
+    _FAEN2=0;
+    _FAEN3=0;
+    _FAEN4=0;
+    _FBEN1=0;
+    _FBEN2=0;
+    _FBEN3=0;
+    _FBEN4=0;
+    
 	PTCON = 0x8002;		// start PWM as center aligned mode
+    
 	return;				 
 }
 
@@ -1343,6 +1358,7 @@ void InitICandCN(void)
 	IFS0bits.CNIF = 0;	// Clear interrupt flag
 
 	// Init Input Capture 6
+    IPC1bits.T3IP = 7; //Set Timer3 auf höchste Priorität
 	IC6CON = 0x0001;	// Input capture every edge with interrupts and TMR3, ICTMR = 0 für Timer3
 	IFS1bits.IC6IF = 0;	// Clear interrupt flag
 
