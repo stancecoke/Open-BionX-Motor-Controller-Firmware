@@ -123,8 +123,8 @@ typedef signed int SFRAC16;
 #define HALLA	1	// Connected to RB3
 #define HALLB	2	// Connected to RB4
 #define HALLC	4	// Connected to RB5
-#define CW	0		// Counter Clock Wise direction
-#define CCW	1		// Clock Wise direction
+#define CW	0		// Clock Wise direction
+#define CCW	1		// Counter Clock Wise direction
 #define SWITCH_S2	(!PORTDbits.RD8) // Push button S2 "dir" connector on BionX PCB
 
 // Period Calculation
@@ -177,6 +177,7 @@ int PhaseValues[6] = {PHASE_ZERO, PHASE_ONE, PHASE_TWO, PHASE_THREE, PHASE_FOUR,
 // asymetry of the sinewave
 int PhaseOffset = 4100;
 char Buf[80];
+unsigned int Winkel = 0; //für self detection
 
 int i=0, j=0, ADCValues[3];
 int __C30_UART = 2; //leitet Printbefehl auf UART2 um.
@@ -429,9 +430,9 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 		MotorStalledCounter = 0;
 
 		// Motor current direction is computed based on Sector
-		if ((LastSector == 0 && Sector == 1) 
+		if ((LastSector == 1 && Sector == 2) 
                 || (LastSector == 2 && Sector == 3)
-                || (LastSector == 3 && Sector == 4)
+                || (LastSector == 4 && Sector == 5)
                 || (LastSector == 5 && Sector == 0))	
 			Current_Direction = CW;
 		else
@@ -450,7 +451,7 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}		
         
-        //printf("CNInterrupt, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), Sector, Phase, RefSpeed, Current_Direction);
+        //printf("CNInterrupt, %d, %d, %d, %d, %d\r\n",Winkel, LastSector,Sector, Current_Direction , RefSpeed);
         LastSector = Sector; // Update last sector
         //Hier erst mal Printfunktion einbauen um richtige Übergänge für Richtungserkennung zu testen.
 	}
@@ -507,8 +508,8 @@ void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
 		MotorStalledCounter = 0;
 
 		// Motor current direction is computed based on Sector
-		if ((LastSector == 1 && Sector == 2) 
-                || (LastSector == 4 && Sector== 5))
+		if ((LastSector == 3 && Sector == 4) 
+                || (LastSector == 0 && Sector== 1))
 			Current_Direction = CW;
 		else
 			Current_Direction = CCW;
@@ -526,7 +527,7 @@ void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}
 		IC6_Flag=1;
-        //printf("IC6Interrupt, %d, %d, %d, %d, %d, %d\r\n",(unsigned int)((PORTD >> 5) & 0x0007), Sector, PastCapture, ActualCapture, RefSpeed, Current_Direction);
+        //printf("IC6Interrupt, %d, %d, %d, %d, %d, %d\r\n", Winkel, LastSector, Sector, Current_Direction, PastCapture, ActualCapture);
         LastSector = Sector; // Update last sector
         //hier auch erst mal ausdrucken für richtige Sektoren.
 	}
@@ -652,7 +653,10 @@ void __attribute__((interrupt, no_auto_psv)) _PWMInterrupt (void)
 		#else
 		SVM(-(ControlOutput+1), Phase);
 		#endif
+    
 	}
+    //Winkel++;
+    //SVM(RefSpeed, Winkel);
 	return;
 }
 
@@ -1354,8 +1358,9 @@ void InitICandCN(void)
 	// Init Input change notification 5
 	TRISD |= 0x70;		// Ensure that hall connections are inputs 
 	CNPU1 = 0;	    	// Disable all CN pull ups
-	CNEN1 = 0x4000;		// Enable CN15
-    CNEN2 = 0x0001;		// Enable CN15
+	CNEN1 = 0x8000;		// Enable CN15
+    CNEN2 = 0x0001;		// Enable CN16
+    IPC3bits.CNIP = 7;  // Change Notification interrupt mit höchster Priorität
 	IFS0bits.CNIF = 0;	// Clear interrupt flag
 
 	// Init Input Capture 6
