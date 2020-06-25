@@ -100,7 +100,7 @@ typedef signed int SFRAC16;
 // These Phase values represent the base Phase value of the sinewave for each
 // one of the sectors (each sector is a translation of the hall effect sensors
 // reading 
-#define PHASE_ZERO 	43501+2500
+#define PHASE_ZERO 	43501+2500  //"motor specific angle"
 #define PHASE_ONE	((PHASE_ZERO + 65536/6) % 65536)
 #define PHASE_TWO	((PHASE_ONE + 65536/6) % 65536)
 #define PHASE_THREE	((PHASE_TWO + 65536/6) % 65536)
@@ -284,10 +284,10 @@ SFRAC16 _MAX_PH_ADV = MAX_PH_ADV;
 
 void __attribute__((interrupt, no_auto_psv)) _T1Interrupt (void)
 {
-	t1_counter++;
+	//t1_counter++;
     IFS0bits.T1IF = 0;
     j++;
-    if (!logFlag)k++;
+    //if (!logFlag)k++;
 	Period = ActualCapture - PastCapture;  // This is an UNsigned substraction
                                            // to get the Period between one 
                                            // hall effect sensor transition
@@ -420,7 +420,7 @@ void __attribute__((interrupt, no_auto_psv)) _T1Interrupt (void)
 
 void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 {
-	CN_counter++;
+	//CN_counter++;
     IFS0bits.CNIF = 0;	// Clear interrupt flag
 	HallValue = (unsigned int)((PORTD >> 5) & 0x0007);	// Read halls from RD5 to RD7
 	Sector = SectorTable[HallValue];	// Get Sector from table, SectorTable[] = {-1,4,2,3,0,5,1,-1};
@@ -492,7 +492,7 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt (void)
 // Hall 3 auf Pin RD5 = IC6 Input Capture 6, muß noch rausfinden, zu welchem Timer der gehört...
 void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
 {
-	IC6_counter++;
+	//IC6_counter++;
     IFS1bits.IC6IF = 0;	// Cleat interrupt flag
 	HallValue = (unsigned int)((PORTD >> 5) & 0x0007);	// Read halls
 	Sector = SectorTable[HallValue];	// Get Sector from table
@@ -532,7 +532,7 @@ void __attribute__((interrupt, no_auto_psv)) _IC6Interrupt (void)
             // symmetry of the sine table used for CW and CCW
 			Phase = PhaseValues[(Sector + 3) % 6] + PhaseOffset;
 		}
-		IC6_Flag=1;
+		//IC6_Flag=1;
         //printf("IC6Interrupt, %d, %d, %d, %d, %d, %d\r\n", Winkel, LastSector, Sector, Current_Direction, PastCapture, ActualCapture);
         LastSector = Sector; // Update last sector
         //hier auch erst mal ausdrucken für richtige Sektoren.
@@ -632,7 +632,7 @@ void __attribute__((interrupt, no_auto_psv)) _PWMInterrupt (void)
     //k=0, logFlag=0, index1=0, index2=0, LogValues[2][600]
     
     
-    PWM_counter++;
+    //PWM_counter++;
 	IFS2bits.PWMIF = 0;	// Clear interrupt flag
 
 	if (Required_Direction == CW)
@@ -666,6 +666,7 @@ void __attribute__((interrupt, no_auto_psv)) _PWMInterrupt (void)
         
     
 	}
+    /*
     if( k>5000 && index2<600){
             LogValues[0][index2] = Sector;
             LogValues[1][index2] = PhaseInc;
@@ -675,7 +676,7 @@ void __attribute__((interrupt, no_auto_psv)) _PWMInterrupt (void)
         else if (index2==600){ 
             logFlag = 1; 
             index2 = 0;
-        }
+        }*/
     //Winkel++;
     //SVM(RefSpeed, Winkel);
 	return;
@@ -701,7 +702,7 @@ void __attribute__((interrupt, no_auto_psv)) _PWMInterrupt (void)
 
 void __attribute__((interrupt, no_auto_psv)) _ADCInterrupt (void)
 {
-	ADC_counter++;
+	//ADC_counter++;
     IFS0bits.ADIF = 0;	// Clear interrupt flag
 	RefSpeed = ADCBUF0; // Read POT value to set Reference Speed
 	return;
@@ -714,14 +715,14 @@ void __attribute__((__interrupt__, no_auto_psv)) _U2TXInterrupt(void)
 
 {
  IFS1bits.U2TXIF = 0;
- tx_counter++;
+ //tx_counter++;
 }
 
 
 // This is UART2 receive ISR done
 void __attribute__((__interrupt__, no_auto_psv)) _U2RXInterrupt(void)
 {
-    rx_counter++;
+    //rx_counter++;
     IFS1bits.U2RXIF = 0;
 // Read the receive buffer till atleast one or more character can be read 
  while( DataRdyUART2())
@@ -815,7 +816,7 @@ Also Enable loopback mode */
 
     while(1)
     {   
-        if (!Flags.MotorRunning&&!logFlag)RunMotor();
+        if (!Flags.MotorRunning)RunMotor();
  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 	/*if ((SWITCH_S2) && (!Flags.MotorRunning))
 		{
@@ -845,18 +846,18 @@ Also Enable loopback mode */
                 
         ClrWdt();
         */
-    if (logFlag){
+    /*if (logFlag){
        StopMotor();
        for(j=0; j <= 600; j++){
            printf("%u, %u, %u\r\n", LogValues[0][j], LogValues[1][j], LogValues[2][j]);
        }
        logFlag=0;
        k=0;
-    }
+    }*/
     
     if(j>500){
         j=0;
-        //printf("Mainloop, %d, %d, %d, %d\r\n", Sector, Current_Direction, RefSpeed, Period );
+        printf("%u, %u, %u, %u, %u\r\n", Sector, Phase, PhaseInc, RefSpeed, Period );
         if(IC6_Flag)IC6_Flag=0;
     }
     }
